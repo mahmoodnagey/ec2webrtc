@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS2 Robot Camera Stream</title>
+    <style>
+        #robot-video {
+            width: 640px;
+            height: 480px;
+            background-color: #000;
+        }
+    </style>
+</head>
+<body>
+    <h1>ROS2 Robot Camera Stream</h1>
+    <video id="robot-video" autoplay playsinline></video>
+    <div id="connection-status">Disconnected</div>
+    <button id="reconnect-button" onclick="initWebRTC()">Reconnect</button>
+
+    <script src="adapter.js"></script>
+    <script src="webrtc_ros.js"></script>
+    <script src="chat.js"></script>
+</body>
+</html>
