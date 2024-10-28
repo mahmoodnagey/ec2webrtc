@@ -1,0 +1,27 @@
+{
+  "name": "ec2webrtcdemo",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mahmoodnagey/ec2webrtc.git"
+  },
+  "author": "mahmoudnagy",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "bugs": {
+    "url": "https://github.com/mahmoodnagey/ec2webrtc/issues"
+  },
+  "homepage": "https://github.com/mahmoodnagey/ec2webrtc#readme",
+  "description": ""
+}
