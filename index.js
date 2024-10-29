@@ -1,13 +1,18 @@
 const express = require("express");
+const http = require("http");  // Changed from https to http
+const fs = require("fs");
 const socket = require("socket.io");
-const https = require("https");
+const path = require("path");
 const app = express();
 
-const port = process.env.PORT || 4000;
+// For development/testing with self-signed certificates
+const credentials = {
+  key: fs.readFileSync(path.join(__dirname, 'private.key')),
+  cert: fs.readFileSync(path.join(__dirname, 'certificate.crt'))
+};
 
-let server = app.listen(port, function () {
-  console.log("Server is running on port", port);
-});
+const port = process.env.PORT || 4000;  // Changed to 4000
+let server = http.createServer(app);  // Remove SSL credentials as Nginx will handle SSL
 
 app.use(express.static("public"));
 
@@ -48,7 +53,12 @@ function getIceServers() {
   });
 }
 
-let io = socket(server);
+let io = socket(server, {
+  cors: {
+      origin: "*",
+      methods: ["GET", "POST"]
+  }
+});
 
 io.on("connection", function (socket) {
   console.log("User Connected:", socket.id);
@@ -56,13 +66,25 @@ io.on("connection", function (socket) {
   // Send ICE servers to the client upon connection
   getIceServers()
     .then((iceServers) => {
+      // Add additional STUN/TURN servers for IPv6 support
+      const additionalServers = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" }
+      ];
+      
+      iceServers.push(...additionalServers);
+
       socket.emit("iceServers", { iceServers: iceServers });
     })
     .catch((error) => {
       console.error("Failed to get ICE servers:", error);
       socket.emit("iceServers", { 
         iceServers: [
-          { urls: "stun:stun.l.google.com:19302" }
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
         ] 
       });
     });
@@ -99,4 +121,8 @@ io.on("connection", function (socket) {
   socket.on("answer", function (answer, roomName) {
     socket.broadcast.to(roomName).emit("answer", answer);
   });
+});
+
+server.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
 });
