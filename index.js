@@ -1,102 +1,135 @@
 const express = require("express");
+const http = require("http");  // Changed to http since Nginx handles SSL
 const socket = require("socket.io");
-const https = require("https");
 const app = express();
 
+// Set port to 4000 as Nginx will proxy to this port
 const port = process.env.PORT || 4000;
 
-let server = app.listen(port, function () {
-  console.log("Server is running on port", port);
-});
+// Create server
+const server = http.createServer(app);
 
+// Serve static files from 'public' directory
 app.use(express.static("public"));
 
-// Function to get ICE servers from Xirsys
+// Socket.io setup with CORS enabled
+const io = socket(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Function to get ICE servers
 function getIceServers() {
-  return new Promise((resolve, reject) => {
-    const xirsysOptions = {
-      host: "global.xirsys.net",
-      path: "/_turn/MyFirstApp",
-      method: "PUT",
-      headers: {
-        "Authorization": "Basic " + Buffer.from("mahmoudnagy:4f8fb972-7b24-11ef-a87f-0242ac130002").toString("base64"),
-        "Content-Type": "application/json",
-      }
-    };
-
-    const req = https.request(xirsysOptions, (res) => {
-      let data = "";
-      res.on("data", (chunk) => data += chunk);
-      res.on("end", () => {
-        try {
-          const iceServers = JSON.parse(data).v.iceServers;
-          console.log("ICE servers fetched:", iceServers);
-          resolve(iceServers);
-        } catch (error) {
-          console.error("Error parsing ICE servers:", error);
-          reject(error);
-        }
-      });
+    return new Promise((resolve) => {
+        // Using Google's public STUN servers and custom STUN/TURN servers for IPv6
+        const iceServers = [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            { urls: "stun:stun4.l.google.com:19302" }
+        ];
+        resolve(iceServers);
     });
-
-    req.on("error", (error) => {
-      console.error("Error fetching ICE servers:", error);
-      reject(error);
-    });
-
-    req.end();
-  });
 }
 
-let io = socket(server);
-
+// Socket.io connection handling
 io.on("connection", function (socket) {
-  console.log("User Connected:", socket.id);
+    console.log("User Connected:", socket.id);
 
-  // Send ICE servers to the client upon connection
-  getIceServers()
-    .then((iceServers) => {
-      socket.emit("iceServers", { iceServers: iceServers });
-    })
-    .catch((error) => {
-      console.error("Failed to get ICE servers:", error);
-      socket.emit("iceServers", { 
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" }
-        ] 
-      });
+    // Send ICE servers to the client upon connection
+    getIceServers()
+        .then((iceServers) => {
+            socket.emit("iceServers", { iceServers: iceServers });
+        })
+        .catch((error) => {
+            console.error("Failed to get ICE servers:", error);
+            socket.emit("iceServers", { 
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    { urls: "stun:stun1.l.google.com:19302" }
+                ] 
+            });
+        });
+
+    // Handle room joining
+    socket.on("join", function (roomName) {
+        let rooms = io.sockets.adapter.rooms;
+        let room = rooms.get(roomName);
+
+        if (room == undefined) {
+            socket.join(roomName);
+            socket.emit("created");
+        } else if (room.size == 1) {
+            socket.join(roomName);
+            socket.emit("joined");
+        } else {
+            socket.emit("full");
+        }
+        console.log("Rooms:", rooms);
     });
 
-  socket.on("join", function (roomName) {
-    let rooms = io.sockets.adapter.rooms;
-    let room = rooms.get(roomName);
+    // Handle ready signal
+    socket.on("ready", function (roomName) {
+        socket.broadcast.to(roomName).emit("ready");
+    });
 
-    if (room == undefined) {
-      socket.join(roomName);
-      socket.emit("created");
-    } else if (room.size == 1) {
-      socket.join(roomName);
-      socket.emit("joined");
-    } else {
-      socket.emit("full");
-    }
-    console.log(rooms);
-  });
+    // Handle ICE candidates
+    socket.on("candidate", function (candidate, roomName) {
+        console.log("Received candidate for room:", roomName);
+        socket.broadcast.to(roomName).emit("candidate", candidate);
+    });
 
-  socket.on("ready", function (roomName) {
-    socket.broadcast.to(roomName).emit("ready");
-  });
+    // Handle offers
+    socket.on("offer", function (offer, roomName) {
+        console.log("Received offer for room:", roomName);
+        socket.broadcast.to(roomName).emit("offer", offer);
+    });
 
-  socket.on("candidate", function (candidate, roomName) {
-    console.log("Candidate:", candidate);
-    socket.broadcast.to(roomName).emit("candidate", candidate);
-  });
+    // Handle answers
+    socket.on("answer", function (answer, roomName) {
+        console.log("Received answer for room:", roomName);
+        socket.broadcast.to(roomName).emit("answer", answer);
+    });
 
-  socket.on("offer", function (offer, roomName) {
-    socket.broadcast.to(roomName).emit("offer", offer);
-  });
+    // Handle disconnection
+    socket.on("disconnect", function() {
+        console.log("User Disconnected:", socket.id);
+    });
+});
 
-  socket.on("answer", function (answer, roomName) {
-    socket.broadcast.to(roomName).emit("answer", answer);
-  });
+// Error handling
+server.on('error', (error) => {
+    console.error('Server error:', error);
+});
+
+// Start server
+server.listen(port, '0.0.0.0', () => {
+    console.log(`Server is running on port ${port}`);
+});
+
+// Handle process termination
+process.on('SIGTERM', () => {
+    console.log('Received SIGTERM. Performing graceful shutdown...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
+process.on('SIGINT', () => {
+    console.log('Received SIGINT. Performing graceful shutdown...');
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
+// Uncaught exception handler
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // Perform any necessary cleanup here
+    process.exit(1);
 });

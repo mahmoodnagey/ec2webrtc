@@ -1,7 +1,14 @@
-// let robotAddress = 'localhost';  // Change this to your robot's IP if not running locally
-let robotAddress = '192.168.1.155';  // Change this to your robot's IP if not running locally
-
-let robotPort = '8080';
+// Configuration
+const config = {
+    ec2: {
+        address: '3.84.28.236',
+        port: 443
+    },
+    robot: {
+        address: 'fc94:5f1d:e53c:704c:8289:442a:c86c:22f2',  // Your robot's IPv6
+        port: 8080
+    }
+};
 
 let webrtcRosConnection;
 let connectionAttempts = 0;
@@ -15,7 +22,10 @@ function updateStatus(message) {
 function initWebRTC() {
     updateStatus('Initializing WebRTC connection...');
     
-    const signalingServerPath = `ws://${robotAddress}:${robotPort}/webrtc`;
+    // Using secure WebSocket with IPv6
+    const signalingServerPath = `wss://[${config.robot.address}]:${config.robot.port}/webrtc`;
+    console.log('Connecting to:', signalingServerPath);
+
     webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath);
 
     webrtcRosConnection.onConfigurationNeeded = function() {
