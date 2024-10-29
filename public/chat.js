@@ -5,7 +5,8 @@ const config = {
         port: 443
     },
     robot: {
-        address: 'fc94:5f1d:e53c:704c:8289:442a:c86c:22f2',  // Your robot's IPv6
+        // address: 'fc94:5f1d:e53c:704c:8289:442a:c86c:22f2',  // Your robot's IPv6
+        address: 'robopave',  // Your robot's IPv6
         port: 8080
     }
 };
