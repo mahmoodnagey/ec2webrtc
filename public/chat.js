@@ -13,7 +13,7 @@ const config = {
 
 let webrtcRosConnection;
 let connectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 5;
+const MAX_CONNECTION_ATTEMPTS = 20;
 
 function updateStatus(message) {
     document.getElementById('connection-status').textContent = message;
