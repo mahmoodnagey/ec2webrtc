@@ -24,7 +24,7 @@ function initWebRTC() {
     updateStatus('Initializing WebRTC connection...');
     
     // Using secure WebSocket with IPv6
-    const signalingServerPath = `wss://[${config.robot.address}]:${config.robot.port}/webrtc`;
+    const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/webrtc`;
     console.log('Connecting to:', signalingServerPath);
 
     webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath);
