@@ -7,7 +7,6 @@ const config = {
     robot: {
         address: 'robopave',  // Using hostname instead of IPv6
         port: 8080,
-        useSSL: false  // Disable SSL for robot connection
     }
 };
 
@@ -35,7 +34,7 @@ function validateHostname(hostname) {
 
 async function checkHostAvailability(hostname, port) {
     try {
-        const signalingServerPath = `ws://${hostname}:${port}/webrtc`;
+        const signalingServerPath = `wss://${hostname}:${port}/webrtc`;
         const ws = new WebSocket(signalingServerPath);
         
         return new Promise((resolve, reject) => {
@@ -77,7 +76,7 @@ async function initWebRTC() {
         }
 
         // Using secure WebSocket with hostname
-        const signalingServerPath = `ws://${config.robot.address}:${config.robot.port}/webrtc`;
+        const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/webrtc`;
         console.log('Connecting to:', signalingServerPath);
 
         webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath);
