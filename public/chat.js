@@ -5,8 +5,7 @@ const config = {
         port: 443
     },
     robot: {
-        // address: 'fc94:5f1d:e53c:704c:8289:442a:c86c:22f2',  // Your robot's IPv6
-        address: 'robopave',  // Your robot's IPv6
+        address: 'robopave',  // Using hostname instead of IPv6
         port: 8080
     }
 };
@@ -14,71 +13,172 @@ const config = {
 let webrtcRosConnection;
 let connectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 20;
+const RETRY_INTERVAL = 2000; // 2 seconds
 
-function updateStatus(message) {
-    document.getElementById('connection-status').textContent = message;
+function updateStatus(message, isError = false) {
+    const statusElement = document.getElementById('connection-status');
+    statusElement.textContent = message;
+    if (isError) {
+        statusElement.style.color = 'red';
+    } else {
+        statusElement.style.color = 'initial';
+    }
     console.log(message);
 }
 
-function initWebRTC() {
-    updateStatus('Initializing WebRTC connection...');
-    
-    // Using secure WebSocket with IPv6
-    const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/webrtc`;
-    console.log('Connecting to:', signalingServerPath);
+function validateHostname(hostname) {
+    // Basic hostname validation
+    const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+    return hostnameRegex.test(hostname);
+}
 
-    webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath);
-
-    webrtcRosConnection.onConfigurationNeeded = function() {
-        updateStatus('Configuration needed, requesting video stream');
-        webrtcRosConnection.addRemoteStream({
-            video: {
-                id: 'subscribed_video',
-                src: 'ros_image:/image_raw'
-            }
-        }).then(function(event) {
-            updateStatus('Remote stream added');
-            const videoElement = document.getElementById('robot-video');
-            videoElement.srcObject = event.stream;
-            videoElement.onloadedmetadata = function(e) {
-                videoElement.play().catch(function(error) {
-                    console.error('Error playing video:', error);
-                });
+async function checkHostAvailability(hostname, port) {
+    try {
+        const signalingServerPath = `wss://${hostname}:${port}/webrtc`;
+        const ws = new WebSocket(signalingServerPath);
+        
+        return new Promise((resolve, reject) => {
+            ws.onopen = () => {
+                ws.close();
+                resolve(true);
             };
-        }).catch(function(error) {
-            updateStatus('Error adding remote stream: ' + error);
-            retryConnection();
+            
+            ws.onerror = (error) => {
+                reject(new Error(`Failed to connect to ${hostname}:${port}`));
+            };
+
+            // Timeout after 5 seconds
+            setTimeout(() => {
+                ws.close();
+                reject(new Error('Connection timeout'));
+            }, 5000);
         });
+    } catch (error) {
+        throw new Error(`Failed to connect to ${hostname}:${port}: ${error.message}`);
+    }
+}
 
-        webrtcRosConnection.sendConfigure();
-    };
+async function initWebRTC() {
+    try {
+        updateStatus('Validating connection parameters...');
 
-    webrtcRosConnection.connect();
-    console.log('WebRTC connection initiated');
+        // Validate hostname
+        if (!validateHostname(config.robot.address)) {
+            throw new Error('Invalid hostname format');
+        }
 
-    webrtcRosConnection.signalingChannel.onerror = function(error) {
-        console.error('WebSocket error:', error);
+        // Check if host is available
+        try {
+            await checkHostAvailability(config.robot.address, config.robot.port);
+            updateStatus('Host is available, establishing WebRTC connection...');
+        } catch (error) {
+            throw new Error(`Host availability check failed: ${error.message}`);
+        }
+
+        // Using secure WebSocket with hostname
+        const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/webrtc`;
+        console.log('Connecting to:', signalingServerPath);
+
+        webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath);
+
+        // Configure WebRTC connection
+        webrtcRosConnection.onConfigurationNeeded = async function() {
+            updateStatus('Requesting video stream...');
+            try {
+                const event = await webrtcRosConnection.addRemoteStream({
+                    video: {
+                        id: 'subscribed_video',
+                        src: 'ros_image:/image_raw'
+                    }
+                });
+
+                updateStatus('Video stream connected successfully');
+                const videoElement = document.getElementById('robot-video');
+                videoElement.srcObject = event.stream;
+                
+                try {
+                    await videoElement.play();
+                    updateStatus('Video playback started');
+                    // Reset connection attempts on successful connection
+                    connectionAttempts = 0;
+                } catch (error) {
+                    throw new Error(`Video playback failed: ${error.message}`);
+                }
+            } catch (error) {
+                throw new Error(`Failed to add remote stream: ${error.message}`);
+            }
+
+            webrtcRosConnection.sendConfigure();
+        };
+
+        // Set up WebSocket error handling
+        webrtcRosConnection.signalingChannel.onerror = function(error) {
+            throw new Error(`WebSocket error: ${error.message}`);
+        };
+
+        webrtcRosConnection.signalingChannel.onclose = function(event) {
+            if (!event.wasClean) {
+                throw new Error(`WebSocket connection closed unexpectedly: ${event.reason}`);
+            }
+        };
+
+        // Initiate connection
+        await webrtcRosConnection.connect();
+        updateStatus('WebRTC connection established');
+
+    } catch (error) {
+        updateStatus(`Connection error: ${error.message}`, true);
         retryConnection();
-    };
-
-    webrtcRosConnection.signalingChannel.onclose = function(event) {
-        console.log('WebSocket connection closed:', event);
-        retryConnection();
-    };
+    }
 }
 
 function retryConnection() {
     if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
         connectionAttempts++;
-        updateStatus(`Connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}...`);
-        setTimeout(initWebRTC, 2000);  // Wait 2 seconds before retrying
+        const message = `Connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}...`;
+        updateStatus(message);
+        
+        // Exponential backoff for retry delays
+        const delay = Math.min(RETRY_INTERVAL * Math.pow(1.5, connectionAttempts - 1), 10000);
+        setTimeout(initWebRTC, delay);
     } else {
-        updateStatus('Max connection attempts reached. Please refresh the page to try again.');
+        updateStatus('Maximum connection attempts reached. Please check the following:', true);
+        console.log('Troubleshooting steps:');
+        console.log('1. Verify that the hostname "robopave" is properly configured in your DNS or hosts file');
+        console.log('2. Ensure the robot is powered on and connected to the network');
+        console.log('3. Check if the WebRTC service is running on the robot');
+        console.log('4. Verify that port 8080 is open and accessible');
+        console.log('5. Check SSL certificate configuration for WSS connection');
     }
 }
 
-// Call initWebRTC when the page loads
+// Clean up function for proper resource management
+function cleanupWebRTC() {
+    if (webrtcRosConnection) {
+        try {
+            webrtcRosConnection.close();
+        } catch (error) {
+            console.error('Error during cleanup:', error);
+        }
+    }
+}
+
+// Initialize connection when page loads
 window.onload = function() {
-    updateStatus('Page loaded, initializing WebRTC...');
+    updateStatus('Initializing connection...');
     initWebRTC();
 };
+
+// Cleanup on page unload
+window.onbeforeunload = cleanupWebRTC;
+
+// Handle visibility changes to manage connection
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        updateStatus('Page hidden, cleaning up resources...');
+        cleanupWebRTC();
+    } else {
+        updateStatus('Page visible, re-initializing connection...');
+        initWebRTC();
+    }
+});
