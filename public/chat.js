@@ -34,7 +34,7 @@ function validateHostname(hostname) {
 
 async function checkHostAvailability(hostname, port) {
     try {
-        const signalingServerPath = `wss://${hostname}:${port}/webrtc`;
+        const signalingServerPath = `ws://${hostname}:${port}/webrtc`;
         const ws = new WebSocket(signalingServerPath);
         
         return new Promise((resolve, reject) => {
