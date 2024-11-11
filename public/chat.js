@@ -12,7 +12,7 @@ const config = {
 
 let webrtcRosConnection;
 let connectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 20;
+const MAX_CONNECTION_ATTEMPTS = 5;
 const RETRY_INTERVAL = 2000; // 2 seconds
 
 function updateStatus(message, isError = false) {
