@@ -3,23 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROS2 Robot Camera Stream</title>
-    <style>
-        #robot-video {
-            width: 640px;
-            height: 480px;
-            background-color: #000;
-        }
-    </style>
+    <title>Robot Camera Stream</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>ROS2 Robot Camera Stream</h1>
-    <video id="robot-video" autoplay playsinline></video>
-    <div id="connection-status">Disconnected</div>
-    <button id="reconnect-button" onclick="initWebRTC()">Reconnect</button>
+    <div class="container">
+        <h1>Robot Camera Stream</h1>
+        <div id="connection-status">Disconnected</div>
+        <video id="robot-video" autoplay playsinline></video>
+        <button id="reconnect-button" onclick="window.initWebRTC()">Reconnect</button>
+    </div>
 
-    <script src="adapter.js"></script>
-    <script src="webrtc_ros.js"></script>
-    <script src="chat.js"></script>
+    <script src="js/adapter.js"></script>
+    <script src="js/webrtc_ros.js"></script>
+    <script src="js/chat.js"></script>
 </body>
 </html>
