@@ -5,7 +5,7 @@ const config = {
     },
     robot: {
         address: 'robopave',
-        port: 8080
+        port: 8080,
     },
     xirsys: {
         url: 'https://global.xirsys.net',
@@ -13,14 +13,6 @@ const config = {
         secret: '4f8fb972-7b24-11ef-a87f-0242ac130002',
         channel: 'MyFirstApp'
     },
-    defaultIceServers: [
-        { 
-            urls: [
-                'stun:stun.l.google.com:19302',
-                'stun:stun1.l.google.com:19302'
-            ] 
-        }
-    ],
     webrtcOptions: {
         bundlePolicy: 'max-bundle',
         rtcpMuxPolicy: 'require',
@@ -80,7 +72,13 @@ async function checkVPNConnection() {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
-            signal: controller.signal
+            signal: controller.signal,
+            headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            // Accept self-signed certificate over VPN
+            rejectUnauthorized: false
         });
         
         clearTimeout(timeoutId);
@@ -88,9 +86,13 @@ async function checkVPNConnection() {
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        const data = await response.json();
+        console.log('VPN health check response:', data);
         
         return true;
     } catch (error) {
+        console.error('VPN health check failed:', error);
         if (error.name === 'AbortError') {
             throw new Error('VPN connection timeout - Check Husarnet status');
         }
@@ -116,7 +118,8 @@ async function initWebRTC() {
 
         webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
             ...config.webrtcOptions,
-            iceServers: iceServers
+            iceServers: iceServers,
+            certificates: true // Enable certificate handling
         });
 
         // Handle ICE connection states
