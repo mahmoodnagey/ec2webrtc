@@ -79,7 +79,7 @@ async function checkVPNConnection() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        const response = await fetch(`http://${config.robot.address}:${config.robot.port}/health`, {
+        const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
             signal: controller.signal
         });
         
