@@ -15,7 +15,7 @@ const config = {
     xirsys: {
         url: 'https://global.xirsys.net',
         ident: 'mahmoudnagy',
-        secret: '4f8fb972-7b24-11ef-a87f-0242ac130002',
+        secret: '1174b892-a746-11ef-ae7d-0242ac130006',
         channel: 'MyFirstApp'
     },
     webrtcOptions: {
@@ -36,11 +36,12 @@ const RETRY_INTERVAL = 2000;
 async function getXirSysIceServers() {
     try {
         console.log('Fetching ICE servers from proxy...');
-        const response = await fetch(`https://${config.ec2.address}/xirsys/ice`, {
-            method: 'GET',
+        let response = await fetch("https://global.xirsys.net/_turn/MyFirstApp", {
+            method: "PUT",
             headers: {
-                'Accept': 'application/json'
-            }
+              "Authorization": `Basic ${btoa("mahmoudnagy:1174b892-a746-11ef-ae7d-0242ac130006")}`,
+              "Content-Type": "application/json",
+            },
         });
 
         if (!response.ok) {
