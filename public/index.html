@@ -4,18 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Robot Camera Stream</title>
-    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <h1>Robot Camera Stream</h1>
-        <div id="connection-status">Disconnected</div>
+        <div id="connection-status">Initializing...</div>
         <video id="robot-video" autoplay playsinline></video>
-        <button id="reconnect-button" onclick="window.initWebRTC()">Reconnect</button>
+        <button onclick="testConnection()">Test Connection</button>
     </div>
 
-    <script src="adapter.js"></script>
-    <script src="webrtc_ros.js"></script>
-    <script src="chat.js"></script>
+    <!-- Load dependencies first -->
+    <script src="js/adapter.js"></script>
+    <script src="js/webrtc_ros.js"></script>
+    <!-- Load your application code last -->
+    <script src="js/chat.js"></script>
 </body>
 </html>

@@ -114,13 +114,30 @@ async function checkVPNConnection() {
     }
 }
 
+// Add this before initWebRTC
+function checkWebRTCAvailability() {
+    if (!window.WebrtcRos) {
+        throw new Error('WebrtcRos not available. Check if webrtc_ros.js is loaded correctly');
+    }
+    console.log('WebrtcRos is available');
+}
+
+// Update window.onload
+window.addEventListener('load', async () => {
+    try {
+        checkWebRTCAvailability();
+        await initWebRTC();
+    } catch (error) {
+        updateStatus(`Initialization error: ${error.message}`, true);
+    }
+});
+
 // Initialize WebRTC connection
 async function initWebRTC() {
-    
     try {
         updateStatus('Initializing connection...');
 
-        // Verify robot connection
+        // Check VPN connection first
         await checkVPNConnection();
         updateStatus('Robot connection verified');
 
@@ -129,116 +146,90 @@ async function initWebRTC() {
         if (!iceServers || !iceServers.length) {
             throw new Error('No valid ICE servers available');
         }
-
         updateStatus('ICE servers obtained');
         console.log('Using ICE servers configuration:', iceServers);
 
-        // Initialize WebRTC connection
+        // Initialize WebRTC connection with verified ICE servers
         const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
         console.log('Connecting to signaling server:', signalingServerPath);
 
-        // Create WebRTC connection with error handling
-        try {
-            webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
-                ...config.webrtcOptions,
-                iceServers: iceServers
-            });
+        // Create connection with configuration
+        webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
+            ...config.webrtcOptions,
+            iceServers: iceServers
+        });
 
-            if (!webrtcRosConnection) {
-                throw new Error('Failed to create WebRTC connection');
+        if (!webrtcRosConnection) {
+            throw new Error('Failed to create WebRTC connection object');
+        }
+
+        // Configure video stream
+        webrtcRosConnection.onConfigurationNeeded = async function() {
+            updateStatus('Setting up video stream...');
+            try {
+                const event = await webrtcRosConnection.addRemoteStream({
+                    video: {
+                        id: 'subscribed_video',
+                        src: 'ros_image:/image_raw'
+                    }
+                });
+
+                const videoElement = document.getElementById('robot-video');
+                if (!videoElement) {
+                    throw new Error('Video element not found');
+                }
+
+                videoElement.srcObject = event.stream;
+                await videoElement.play();
+                
+                updateStatus('Video stream active');
+                connectionAttempts = 0;
+
+                // Monitor video stream health
+                const videoTrack = event.stream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.onended = () => {
+                        updateStatus('Video track ended', true);
+                        retryConnection();
+                    };
+                    videoTrack.onmute = () => {
+                        updateStatus('Video track muted', true);
+                    };
+                    videoTrack.onunmute = () => {
+                        updateStatus('Video track active');
+                    };
+                }
+
+            } catch (error) {
+                throw new Error(`Stream setup failed: ${error.message}`);
             }
 
-            // Handle ICE connection states
-            webrtcRosConnection.oniceconnectionstatechange = (event) => {
-                const state = webrtcRosConnection.iceConnectionState;
-                updateStatus(`ICE Connection: ${state}`);
-                
-                switch (state) {
-                    case 'checking':
-                        console.log('Establishing ICE connection...');
-                        break;
-                    case 'connected':
-                    case 'completed':
-                        console.log('ICE connection established');
-                        break;
-                    case 'failed':
-                        console.error('ICE connection failed');
-                        retryConnection();
-                        break;
-                    case 'disconnected':
-                        console.warn('ICE connection disconnected');
-                        break;
-                }
-            };
+            webrtcRosConnection.sendConfigure();
+        };
 
-            // Configure video stream
-            webrtcRosConnection.onConfigurationNeeded = async function() {
-                updateStatus('Setting up video stream...');
-                try {
-                    const event = await webrtcRosConnection.addRemoteStream({
-                        video: {
-                            id: 'subscribed_video',
-                            src: 'ros_image:/image_raw'
-                        }
-                    });
-
-                    const videoElement = document.getElementById('robot-video');
-                    if (!videoElement) {
-                        throw new Error('Video element not found');
-                    }
-
-                    videoElement.srcObject = event.stream;
-                    await videoElement.play();
-                    
-                    updateStatus('Video stream active');
-                    connectionAttempts = 0;
-
-                    // Monitor video stream health
-                    const videoTrack = event.stream.getVideoTracks()[0];
-                    if (videoTrack) {
-                        videoTrack.onended = () => {
-                            updateStatus('Video track ended', true);
-                            retryConnection();
-                        };
-                        videoTrack.onmute = () => {
-                            updateStatus('Video track muted', true);
-                        };
-                        videoTrack.onunmute = () => {
-                            updateStatus('Video track active');
-                        };
-                    }
-
-                } catch (error) {
-                    throw new Error(`Stream setup failed: ${error.message}`);
-                }
-
-                webrtcRosConnection.sendConfigure();
-            };
-
-            // WebSocket error handling
-            webrtcRosConnection.signalingChannel.onerror = function(error) {
-                updateStatus(`Signaling error: ${error.message}`, true);
-                console.error('WebSocket error:', error);
-            };
-
-            webrtcRosConnection.signalingChannel.onclose = function(event) {
-                const reason = event.reason || 'Unknown reason';
-                updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
-                if (!event.wasClean) {
-                    retryConnection();
-                }
-            };
-
-            // Connect
+        // Connect
+        try {
             await webrtcRosConnection.connect();
-            updateStatus('WebRTC connection established');
+            console.log('WebRTC connection established successfully');
+            
+            // Only set up error handlers after successful connection
+            if (webrtcRosConnection.signalingChannel) {
+                webrtcRosConnection.signalingChannel.onclose = (event) => {
+                    const reason = event.reason || 'Unknown reason';
+                    updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
+                    if (!event.wasClean) {
+                        retryConnection();
+                    }
+                };
+            }
 
+            updateStatus('WebRTC connection established');
         } catch (error) {
-            console.error('Error creating WebRTC connection:', error);
-            throw new Error(`Failed to create WebRTC connection: ${error.message}`);
+            throw new Error(`Connection failed: ${error.message}`);
         }
 
     } catch (error) {
+        console.error('WebRTC initialization error:', error);
         updateStatus(`Connection error: ${error.message}`, true);
         retryConnection();
     }
