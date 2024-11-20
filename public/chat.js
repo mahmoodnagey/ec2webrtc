@@ -163,46 +163,89 @@ async function initWebRTC() {
 
         // Configure video stream
         webrtcRosConnection.onConfigurationNeeded = async function() {
-            updateStatus('Setting up video stream...');
             try {
-                const event = await webrtcRosConnection.addRemoteStream({
+                updateStatus('Setting up video stream...');
+                console.log('Configuring video stream from ROS...');
+        
+                // Add stream configuration logging
+                const streamConfig = {
                     video: {
-                        id: 'subscribe_video',
+                        id: 'subscribed_video',
                         src: 'ros_image:/image_raw'
                     }
-                });
-
+                };
+                console.log('Stream configuration:', streamConfig);
+        
+                const event = await webrtcRosConnection.addRemoteStream(streamConfig);
+                console.log('Remote stream added:', event);
+        
+                if (!event || !event.stream) {
+                    throw new Error('No stream received from robot');
+                }
+        
+                const videoTracks = event.stream.getVideoTracks();
+                console.log('Video tracks:', videoTracks);
+        
+                if (!videoTracks || videoTracks.length === 0) {
+                    throw new Error('No video tracks in stream');
+                }
+        
                 const videoElement = document.getElementById('robot-video');
                 if (!videoElement) {
                     throw new Error('Video element not found');
                 }
-
+        
+                // Set up video element
                 videoElement.srcObject = event.stream;
-                await videoElement.play();
-                
-                updateStatus('Video stream active');
-                connectionAttempts = 0;
-
-                // Monitor video stream health
-                const videoTrack = event.stream.getVideoTracks()[0];
-                if (videoTrack) {
-                    videoTrack.onended = () => {
+                videoElement.onloadedmetadata = () => {
+                    console.log('Video metadata loaded');
+                    updateStatus('Video metadata received');
+                };
+        
+                videoElement.oncanplay = () => {
+                    console.log('Video can play');
+                    updateStatus('Video ready to play');
+                };
+        
+                // Monitor video tracks
+                videoTracks.forEach((track, index) => {
+                    console.log(`Video track ${index} settings:`, track.getSettings());
+                    
+                    track.onended = () => {
+                        console.log(`Video track ${index} ended`);
                         updateStatus('Video track ended', true);
-                        retryConnection();
                     };
-                    videoTrack.onmute = () => {
+        
+                    track.onmute = () => {
+                        console.log(`Video track ${index} muted`);
                         updateStatus('Video track muted', true);
                     };
-                    videoTrack.onunmute = () => {
+        
+                    track.onunmute = () => {
+                        console.log(`Video track ${index} unmuted`);
                         updateStatus('Video track active');
                     };
+                });
+        
+                try {
+                    await videoElement.play();
+                    console.log('Video playback started');
+                    updateStatus('Video stream active');
+                    connectionAttempts = 0;
+                } catch (playError) {
+                    console.error('Video playback failed:', playError);
+                    throw new Error(`Video playback failed: ${playError.message}`);
                 }
-
+        
+                // Send configuration to complete setup
+                console.log('Sending WebRTC configuration...');
+                webrtcRosConnection.sendConfigure();
+                console.log('WebRTC configuration sent');
+        
             } catch (error) {
+                console.error('Video stream setup error:', error);
                 throw new Error(`Stream setup failed: ${error.message}`);
             }
-
-            webrtcRosConnection.sendConfigure();
         };
 
         // Connect

@@ -10,7 +10,17 @@
     <div class="container">
         <h1>Robot Camera Stream</h1>
         <div id="connection-status">Disconnected</div>
-        <video id="robot-video" autoplay playsinline></video>
+        <video id="robot-video" 
+            autoplay 
+            playsinline 
+            style="width: 100%; max-width: 800px; height: auto; border: 1px solid #ccc;"
+            onloadstart="console.log('Video loadstart')"
+            onloadeddata="console.log('Video data loaded')"
+            onloadedmetadata="console.log('Video metadata loaded')"
+            oncanplay="console.log('Video can play')"
+            onplay="console.log('Video playing')"
+            onerror="console.error('Video error:', this.error)"
+        ></video>
         <button id="reconnect-button" onclick="window.initWebRTC()">Reconnect</button>
         <button onclick="testConnection()">Test Connection</button>
     </div>
