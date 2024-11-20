@@ -53,6 +53,7 @@ async function getXirSysIceServers() {
         }
     } catch (error) {
         console.error('Error fetching XirSys ICE servers:', error);
+        // Fallback to public STUN servers
         return [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" }
@@ -75,13 +76,12 @@ async function checkVPNConnection() {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         console.log('Testing robot connection...');
-        const response = await fetch("https://robopave:8080/health", {
-        // const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
+        // Use the new proxy endpoint
+        const response = await fetch(`https://${config.ec2.address}/robot/health`, {
             signal: controller.signal,
             method: 'GET',
             headers: {
-                'Accept': 'application/json',
-                'Origin': `https://${config.ec2.address}`
+                'Accept': 'application/json'
             }
         });
         
@@ -112,8 +112,8 @@ async function initWebRTC() {
         const iceServers = await getXirSysIceServers();
         updateStatus('ICE servers obtained');
 
-        // Initialize WebRTC connection
-        const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/webrtc`;
+        // Use the new proxy endpoint for WebSocket
+        const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
         console.log('Connecting to signaling server:', signalingServerPath);
 
         webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
