@@ -75,7 +75,8 @@ async function checkVPNConnection() {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         console.log('Testing robot connection...');
-        const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
+        const response = await fetch("https://robopave:8080/health", {
+        // const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
             signal: controller.signal,
             method: 'GET',
             headers: {
