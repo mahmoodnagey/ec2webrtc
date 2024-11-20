@@ -167,7 +167,7 @@ async function initWebRTC() {
             try {
                 const event = await webrtcRosConnection.addRemoteStream({
                     video: {
-                        id: 'subscribed_video',
+                        id: 'subscribe_video',
                         src: 'ros_image:/image_raw'
                     }
                 });
