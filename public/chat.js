@@ -1,3 +1,8 @@
+/**
+ * WebRTC Client Configuration and Implementation
+ */
+
+// Configuration
 const config = {
     ec2: {
         address: '3.84.28.236',
@@ -21,46 +26,44 @@ const config = {
     }
 };
 
+// Global variables
 let webrtcRosConnection;
 let connectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 5;
 const RETRY_INTERVAL = 2000;
 
+// Get ICE servers configuration
 async function getXirSysIceServers() {
     try {
-        const response = await fetch(`${config.xirsys.url}/ice`, {
-            method: 'PUT',
+        console.log('Fetching ICE servers from proxy...');
+        const response = await fetch(`https://${config.ec2.address}/xirsys/ice`, {
+            method: 'GET',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Basic ' + btoa(`${config.xirsys.ident}:${config.xirsys.secret}`)
-            },
-            body: JSON.stringify({
-                format: 'urls',
-                channel: config.xirsys.channel
-            })
+                'Accept': 'application/json'
+            }
         });
 
         if (!response.ok) {
-            throw new Error(`XirSys HTTP error: ${response.status}`);
+            throw new Error(`XirSys proxy error: ${response.status}`);
         }
 
         const data = await response.json();
         if (data.v && data.v.iceServers) {
-            console.log('Successfully retrieved XirSys ICE servers');
+            console.log('Successfully retrieved ICE servers');
             return data.v.iceServers;
         } else {
-            throw new Error('Invalid XirSys response format');
+            throw new Error('Invalid ICE servers response format');
         }
     } catch (error) {
-        console.error('Error fetching XirSys ICE servers:', error);
-        // Fallback to public STUN servers
+        console.warn('Using fallback STUN servers:', error);
         return [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
+            { urls: ["stun:stun1.l.google.com:19302"] },
+            { urls: ["stun:stun2.l.google.com:19302"] }
         ];
     }
 }
 
+// Update status display
 function updateStatus(message, isError = false) {
     const statusElement = document.getElementById('connection-status');
     if (statusElement) {
@@ -70,13 +73,13 @@ function updateStatus(message, isError = false) {
     console.log(`[WebRTC Status] ${message}`);
 }
 
+// Check VPN connection through health endpoint
 async function checkVPNConnection() {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         console.log('Testing robot connection...');
-        // Use the new proxy endpoint
         const response = await fetch(`https://${config.ec2.address}/robot/health`, {
             signal: controller.signal,
             method: 'GET',
@@ -100,110 +103,123 @@ async function checkVPNConnection() {
     }
 }
 
+// Initialize WebRTC connection
 async function initWebRTC() {
     try {
         updateStatus('Initializing connection...');
 
-        // Check VPN connection first
+        // Verify robot connection
         await checkVPNConnection();
         updateStatus('Robot connection verified');
 
-        // Get XirSys ICE servers
+        // Get ICE servers
         const iceServers = await getXirSysIceServers();
         updateStatus('ICE servers obtained');
 
-        // Use the new proxy endpoint for WebSocket
+        // Initialize WebRTC connection
         const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
         console.log('Connecting to signaling server:', signalingServerPath);
 
-        webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
-            ...config.webrtcOptions,
-            iceServers: iceServers,
-        });
+        // Create WebRTC connection with error handling
+        try {
+            webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
+                ...config.webrtcOptions,
+                iceServers: iceServers
+            });
 
-        // Handle ICE connection states
-        webrtcRosConnection.oniceconnectionstatechange = (event) => {
-            const state = webrtcRosConnection.iceConnectionState;
-            updateStatus(`ICE Connection: ${state}`);
-            
-            switch (state) {
-                case 'checking':
-                    console.log('Establishing ICE connection...');
-                    break;
-                case 'connected':
-                case 'completed':
-                    console.log('ICE connection established');
-                    break;
-                case 'failed':
-                    console.error('ICE connection failed');
-                    retryConnection();
-                    break;
-                case 'disconnected':
-                    console.warn('ICE connection disconnected');
-                    break;
+            if (!webrtcRosConnection) {
+                throw new Error('Failed to create WebRTC connection');
             }
-        };
 
-        // Configure video stream
-        webrtcRosConnection.onConfigurationNeeded = async function() {
-            updateStatus('Setting up video stream...');
-            try {
-                const event = await webrtcRosConnection.addRemoteStream({
-                    video: {
-                        id: 'subscribed_video',
-                        src: 'ros_image:/image_raw'
-                    }
-                });
-
-                const videoElement = document.getElementById('robot-video');
-                if (!videoElement) {
-                    throw new Error('Video element not found');
-                }
-
-                videoElement.srcObject = event.stream;
-                await videoElement.play();
+            // Handle ICE connection states
+            webrtcRosConnection.oniceconnectionstatechange = (event) => {
+                const state = webrtcRosConnection.iceConnectionState;
+                updateStatus(`ICE Connection: ${state}`);
                 
-                updateStatus('Video stream active');
-                connectionAttempts = 0;
-
-                // Monitor video stream health
-                const videoTrack = event.stream.getVideoTracks()[0];
-                if (videoTrack) {
-                    videoTrack.onended = () => {
-                        updateStatus('Video track ended', true);
+                switch (state) {
+                    case 'checking':
+                        console.log('Establishing ICE connection...');
+                        break;
+                    case 'connected':
+                    case 'completed':
+                        console.log('ICE connection established');
+                        break;
+                    case 'failed':
+                        console.error('ICE connection failed');
                         retryConnection();
-                    };
-                    videoTrack.onmute = () => {
-                        updateStatus('Video track muted', true);
-                    };
-                    videoTrack.onunmute = () => {
-                        updateStatus('Video track active');
-                    };
+                        break;
+                    case 'disconnected':
+                        console.warn('ICE connection disconnected');
+                        break;
+                }
+            };
+
+            // Configure video stream
+            webrtcRosConnection.onConfigurationNeeded = async function() {
+                updateStatus('Setting up video stream...');
+                try {
+                    const event = await webrtcRosConnection.addRemoteStream({
+                        video: {
+                            id: 'subscribed_video',
+                            src: 'ros_image:/image_raw'
+                        }
+                    });
+
+                    const videoElement = document.getElementById('robot-video');
+                    if (!videoElement) {
+                        throw new Error('Video element not found');
+                    }
+
+                    videoElement.srcObject = event.stream;
+                    await videoElement.play();
+                    
+                    updateStatus('Video stream active');
+                    connectionAttempts = 0;
+
+                    // Monitor video stream health
+                    const videoTrack = event.stream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        videoTrack.onended = () => {
+                            updateStatus('Video track ended', true);
+                            retryConnection();
+                        };
+                        videoTrack.onmute = () => {
+                            updateStatus('Video track muted', true);
+                        };
+                        videoTrack.onunmute = () => {
+                            updateStatus('Video track active');
+                        };
+                    }
+
+                } catch (error) {
+                    throw new Error(`Stream setup failed: ${error.message}`);
                 }
 
-            } catch (error) {
-                throw new Error(`Stream setup failed: ${error.message}`);
-            }
+                webrtcRosConnection.sendConfigure();
+            };
 
-            webrtcRosConnection.sendConfigure();
-        };
+            // WebSocket error handling
+            webrtcRosConnection.signalingChannel.onerror = function(error) {
+                updateStatus(`Signaling error: ${error.message}`, true);
+                console.error('WebSocket error:', error);
+            };
 
-        // WebSocket error handling
-        webrtcRosConnection.signalingChannel.onerror = function(error) {
-            updateStatus(`Signaling error: ${error.message}`, true);
-            console.error('WebSocket error:', error);
-        };
+            webrtcRosConnection.signalingChannel.onclose = function(event) {
+                const reason = event.reason || 'Unknown reason';
+                updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
+                if (!event.wasClean) {
+                    retryConnection();
+                }
+            };
 
-        webrtcRosConnection.signalingChannel.onclose = function(event) {
-            const reason = event.reason || 'Unknown reason';
-            updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
-            if (!event.wasClean) {
-                retryConnection();
-            }
-        };
+            // Connect
+            await webrtcRosConnection.connect();
+            updateStatus('WebRTC connection established');
 
-        await webrtcRosConnection.connect();
-        updateStatus('WebRTC connection established');
+        } catch (error) {
+            console.error('Error creating WebRTC connection:', error);
+            throw new Error(`Failed to create WebRTC connection: ${error.message}`);
+        }
 
     } catch (error) {
         updateStatus(`Connection error: ${error.message}`, true);
@@ -211,6 +227,7 @@ async function initWebRTC() {
     }
 }
 
+// Retry connection with exponential backoff
 async function retryConnection() {
     if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
         connectionAttempts++;
@@ -236,11 +253,12 @@ async function retryConnection() {
             '5. Review WebRTC logs:\n',
             '   browser console (F12)\n',
             '   robot webrtc service logs\n',
-            '6. Verify XirSys credentials and service status'
+            '6. Verify network connections and firewalls'
         );
     }
 }
 
+// Clean up WebRTC resources
 async function cleanupWebRTC() {
     if (webrtcRosConnection) {
         try {
@@ -262,6 +280,7 @@ async function cleanupWebRTC() {
     }
 }
 
+// Test connection function
 async function testConnection() {
     try {
         updateStatus('Testing robot connection...');
