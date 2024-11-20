@@ -28,7 +28,7 @@ const config = {
 // Global variables
 let webrtcRosConnection;
 let connectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 1;
+const MAX_CONNECTION_ATTEMPTS = 0;
 const RETRY_INTERVAL = 2000;
 
 // Get ICE servers configuration
