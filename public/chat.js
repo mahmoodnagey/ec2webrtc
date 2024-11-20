@@ -28,7 +28,7 @@ const config = {
 // Global variables
 let webrtcRosConnection;
 let connectionAttempts = 0;
-const MAX_CONNECTION_ATTEMPTS = 5;
+const MAX_CONNECTION_ATTEMPTS = 1;
 const RETRY_INTERVAL = 2000;
 
 // Get ICE servers configuration
@@ -66,8 +66,6 @@ async function getXirSysIceServers() {
                 urls: [
                     "stun:stun1.l.google.com:19302",
                     "stun:stun2.l.google.com:19302",
-                    "stun:stun3.l.google.com:19302",
-                    "stun:stun4.l.google.com:19302"
                 ]
             }
         ];
