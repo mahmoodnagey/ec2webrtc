@@ -53,7 +53,10 @@ async function getXirSysIceServers() {
         }
     } catch (error) {
         console.error('Error fetching XirSys ICE servers:', error);
-        return config.defaultIceServers;
+        return [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+        ];
     }
 }
 
@@ -71,14 +74,14 @@ async function checkVPNConnection() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
+        console.log('Testing robot connection...');
         const response = await fetch(`https://${config.robot.address}:${config.robot.port}/health`, {
             signal: controller.signal,
+            method: 'GET',
             headers: {
                 'Accept': 'application/json',
-                'Cache-Control': 'no-cache'
-            },
-            // Accept self-signed certificate over VPN
-            rejectUnauthorized: false
+                'Origin': `https://${config.ec2.address}`
+            }
         });
         
         clearTimeout(timeoutId);
@@ -88,15 +91,11 @@ async function checkVPNConnection() {
         }
 
         const data = await response.json();
-        console.log('VPN health check response:', data);
-        
+        console.log('Robot health check response:', data);
         return true;
     } catch (error) {
-        console.error('VPN health check failed:', error);
-        if (error.name === 'AbortError') {
-            throw new Error('VPN connection timeout - Check Husarnet status');
-        }
-        throw new Error(`VPN connection error: ${error.message}`);
+        console.error('Robot health check failed:', error);
+        throw error;
     }
 }
 
@@ -106,7 +105,7 @@ async function initWebRTC() {
 
         // Check VPN connection first
         await checkVPNConnection();
-        updateStatus('VPN connection verified');
+        updateStatus('Robot connection verified');
 
         // Get XirSys ICE servers
         const iceServers = await getXirSysIceServers();
@@ -119,7 +118,6 @@ async function initWebRTC() {
         webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
             ...config.webrtcOptions,
             iceServers: iceServers,
-            certificates: true // Enable certificate handling
         });
 
         // Handle ICE connection states
@@ -189,7 +187,7 @@ async function initWebRTC() {
             webrtcRosConnection.sendConfigure();
         };
 
-        // Enhanced WebSocket error handling
+        // WebSocket error handling
         webrtcRosConnection.signalingChannel.onerror = function(error) {
             updateStatus(`Signaling error: ${error.message}`, true);
             console.error('WebSocket error:', error);
@@ -263,6 +261,16 @@ async function cleanupWebRTC() {
     }
 }
 
+async function testConnection() {
+    try {
+        updateStatus('Testing robot connection...');
+        await checkVPNConnection();
+        updateStatus('Robot connection test successful!');
+    } catch (error) {
+        updateStatus(`Connection test failed: ${error.message}`, true);
+    }
+}
+
 // Event Listeners
 document.addEventListener('visibilitychange', async function() {
     if (document.hidden) {
@@ -283,3 +291,4 @@ window.addEventListener('beforeunload', cleanupWebRTC);
 // Make functions globally available
 window.initWebRTC = initWebRTC;
 window.cleanupWebRTC = cleanupWebRTC;
+window.testConnection = testConnection;
