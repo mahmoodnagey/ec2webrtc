@@ -13,10 +13,9 @@ const config = {
         port: 8080,
     },
     xirsys: {
-        url: 'https://global.xirsys.net',
+        url: 'https://global.xirsys.net/_turn/MyFirstApp', // Updated URL
         ident: 'mahmoudnagy',
-        secret: '1174b892-a746-11ef-ae7d-0242ac130006',
-        channel: 'MyFirstApp'
+        secret: '1174b892-a746-11ef-ae7d-0242ac130006', // Updated secret
     },
     webrtcOptions: {
         bundlePolicy: 'max-bundle',
@@ -35,31 +34,42 @@ const RETRY_INTERVAL = 2000;
 // Get ICE servers configuration
 async function getXirSysIceServers() {
     try {
-        console.log('Fetching ICE servers from proxy...');
-        let response = await fetch("https://global.xirsys.net/_turn/MyFirstApp", {
+        console.log('Fetching ICE servers from XirSys...');
+        const auth = btoa(`${config.xirsys.ident}:${config.xirsys.secret}`);
+        
+        let response = await fetch(config.xirsys.url, {
             method: "PUT",
             headers: {
-              "Authorization": `Basic ${btoa("mahmoudnagy:1174b892-a746-11ef-ae7d-0242ac130006")}`,
-              "Content-Type": "application/json",
+                "Authorization": `Basic ${auth}`,
+                "Content-Type": "application/json",
             },
+            // Add error handling timeout
+            signal: AbortSignal.timeout(5000)
         });
 
         if (!response.ok) {
-            throw new Error(`XirSys proxy error: ${response.status}`);
+            throw new Error(`XirSys error: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
         if (data.v && data.v.iceServers) {
-            console.log('Successfully retrieved ICE servers');
+            console.log('Successfully retrieved ICE servers:', data.v.iceServers);
             return data.v.iceServers;
         } else {
+            console.warn('Unexpected XirSys response format:', data);
             throw new Error('Invalid ICE servers response format');
         }
     } catch (error) {
-        console.warn('Using fallback STUN servers:', error);
+        console.warn('Using fallback STUN servers. Error:', error.message);
         return [
-            { urls: ["stun:stun1.l.google.com:19302"] },
-            { urls: ["stun:stun2.l.google.com:19302"] }
+            { 
+                urls: [
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun2.l.google.com:19302",
+                    "stun:stun3.l.google.com:19302",
+                    "stun:stun4.l.google.com:19302"
+                ]
+            }
         ];
     }
 }
@@ -106,6 +116,7 @@ async function checkVPNConnection() {
 
 // Initialize WebRTC connection
 async function initWebRTC() {
+    
     try {
         updateStatus('Initializing connection...');
 
@@ -113,9 +124,14 @@ async function initWebRTC() {
         await checkVPNConnection();
         updateStatus('Robot connection verified');
 
-        // Get ICE servers
+        // Get and verify ICE servers
         const iceServers = await getXirSysIceServers();
+        if (!iceServers || !iceServers.length) {
+            throw new Error('No valid ICE servers available');
+        }
+
         updateStatus('ICE servers obtained');
+        console.log('Using ICE servers configuration:', iceServers);
 
         // Initialize WebRTC connection
         const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
