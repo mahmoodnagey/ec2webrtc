@@ -152,9 +152,8 @@ async function initWebRTC() {
         console.log('Using ICE servers configuration:', iceServers);
 
         // Initialize WebRTC connection with verified ICE servers
-        // const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
+        const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
         // const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/viewer?subscribe_video=ros_image:/image_raw`;
-        const signalingServerPath = `http://${config.robot.address}:${config.robot.port}/viewer?subscribe_video=ros_image:/image_raw`;
 
         console.log('Connecting to signaling server:', signalingServerPath);
 
