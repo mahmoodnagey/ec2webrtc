@@ -254,26 +254,26 @@ async function initWebRTC() {
             }
         };
 
-        // Connect
-        try {
-            await webrtcRosConnection.connect();
-            console.log('WebRTC connection established successfully');
+        // // Connect
+        // try {
+        //     await webrtcRosConnection.connect();
+        //     console.log('WebRTC connection established successfully');
             
-            // Only set up error handlers after successful connection
-            if (webrtcRosConnection.signalingChannel) {
-                webrtcRosConnection.signalingChannel.onclose = (event) => {
-                    const reason = event.reason || 'Unknown reason';
-                    updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
-                    if (!event.wasClean) {
-                        retryConnection();
-                    }
-                };
-            }
+        //     // Only set up error handlers after successful connection
+        //     if (webrtcRosConnection.signalingChannel) {
+        //         webrtcRosConnection.signalingChannel.onclose = (event) => {
+        //             const reason = event.reason || 'Unknown reason';
+        //             updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
+        //             if (!event.wasClean) {
+        //                 retryConnection();
+        //             }
+        //         };
+        //     }
 
-            updateStatus('WebRTC connection established');
-        } catch (error) {
-            throw new Error(`Connection failed: ${error.message}`);
-        }
+        //     updateStatus('WebRTC connection established');
+        // } catch (error) {
+        //     throw new Error(`Connection failed: ${error.message}`);
+        // }
 
     } catch (error) {
         console.error('WebRTC initialization error:', error);
@@ -283,57 +283,57 @@ async function initWebRTC() {
 }
 
 // Retry connection with exponential backoff
-async function retryConnection() {
-    if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-        connectionAttempts++;
-        const delay = Math.min(RETRY_INTERVAL * Math.pow(1.5, connectionAttempts - 1), 10000);
+// async function retryConnection() {
+//     if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+//         connectionAttempts++;
+//         const delay = Math.min(RETRY_INTERVAL * Math.pow(1.5, connectionAttempts - 1), 10000);
         
-        updateStatus(`Retrying connection ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS} in ${delay/1000}s...`);
+//         updateStatus(`Retrying connection ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS} in ${delay/1000}s...`);
         
-        await cleanupWebRTC();
-        setTimeout(initWebRTC, delay);
-    } else {
-        updateStatus('Connection failed after maximum attempts', true);
-        console.error(
-            'Troubleshooting guide:\n',
-            '1. Verify Husarnet VPN status:\n',
-            `   husarnet status\n`,
-            '2. Check robot connectivity:\n',
-            `   ping ${config.robot.address}\n`,
-            '3. Verify WebRTC service on robot:\n',
-            `   sudo systemctl status webrtc-service\n`,
-            '4. Check ROS2 camera node:\n',
-            '   ros2 topic list\n',
-            '   ros2 topic echo /image_raw\n',
-            '5. Review WebRTC logs:\n',
-            '   browser console (F12)\n',
-            '   robot webrtc service logs\n',
-            '6. Verify network connections and firewalls'
-        );
-    }
-}
+//         await cleanupWebRTC();
+//         setTimeout(initWebRTC, delay);
+//     } else {
+//         updateStatus('Connection failed after maximum attempts', true);
+//         console.error(
+//             'Troubleshooting guide:\n',
+//             '1. Verify Husarnet VPN status:\n',
+//             `   husarnet status\n`,
+//             '2. Check robot connectivity:\n',
+//             `   ping ${config.robot.address}\n`,
+//             '3. Verify WebRTC service on robot:\n',
+//             `   sudo systemctl status webrtc-service\n`,
+//             '4. Check ROS2 camera node:\n',
+//             '   ros2 topic list\n',
+//             '   ros2 topic echo /image_raw\n',
+//             '5. Review WebRTC logs:\n',
+//             '   browser console (F12)\n',
+//             '   robot webrtc service logs\n',
+//             '6. Verify network connections and firewalls'
+//         );
+//     }
+// }
 
 // Clean up WebRTC resources
-async function cleanupWebRTC() {
-    if (webrtcRosConnection) {
-        try {
-            const videoElement = document.getElementById('robot-video');
-            if (videoElement && videoElement.srcObject) {
-                videoElement.srcObject.getTracks().forEach(track => {
-                    track.stop();
-                    console.log(`Stopped track: ${track.kind}`);
-                });
-                videoElement.srcObject = null;
-            }
+// async function cleanupWebRTC() {
+//     if (webrtcRosConnection) {
+//         try {
+//             const videoElement = document.getElementById('robot-video');
+//             if (videoElement && videoElement.srcObject) {
+//                 videoElement.srcObject.getTracks().forEach(track => {
+//                     track.stop();
+//                     console.log(`Stopped track: ${track.kind}`);
+//                 });
+//                 videoElement.srcObject = null;
+//             }
             
-            await webrtcRosConnection.close();
-            webrtcRosConnection = null;
-            updateStatus('Connection cleaned up');
-        } catch (error) {
-            console.error('Cleanup error:', error);
-        }
-    }
-}
+//             await webrtcRosConnection.close();
+//             webrtcRosConnection = null;
+//             updateStatus('Connection cleaned up');
+//         } catch (error) {
+//             console.error('Cleanup error:', error);
+//         }
+//     }
+// }
 
 // Test connection function
 async function testConnection() {
