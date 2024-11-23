@@ -91,8 +91,8 @@ async function checkVPNConnection() {
         
         console.log('Testing robot connection...');
         const response = await fetch(
-            // `https://${config.ec2.address}/robot/health`
-            `https://${config.robot.address}:${config.robot.nginxPort}/health`
+            `https://${config.ec2.address}/robot/health`
+            // `https://${config.robot.address}:${config.robot.nginxPort}/health`
             , {
             signal: controller.signal,
             method: 'GET',
