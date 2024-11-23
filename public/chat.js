@@ -361,7 +361,7 @@ document.addEventListener('visibilitychange', async function() {
 window.addEventListener('load', initWebRTC);
 
 // Cleanup on page unload
-window.addEventListener('beforeunload', cleanupWebRTC);
+// window.addEventListener('beforeunload', cleanupWebRTC);
 
 // Make functions globally available
 window.initWebRTC = initWebRTC;
