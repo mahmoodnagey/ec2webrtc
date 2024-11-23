@@ -170,8 +170,8 @@ async function initWebRTC() {
                 // Add stream configuration logging
                 const streamConfig = {
                     video: {
-                        id: 'subscribe_video',
-                        src: 'ros_image:/image_raw'
+                        id: 'subscribed_video', // Internal ID expected by library
+                        src: 'ros_image:/image_raw' // ROS topic path
                     }
                 };
                 console.log('Stream configuration:', streamConfig);
