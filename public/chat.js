@@ -10,7 +10,8 @@ const config = {
     },
     robot: {
         address: 'robopave',
-        port: 8080,
+        port: 8085,  // Changed to WebRTC service port
+        nginxPort: 8080  // Add this for health check
     },
     xirsys: {
         url: 'https://global.xirsys.net/_turn/MyFirstApp', // Updated URL
@@ -89,7 +90,10 @@ async function checkVPNConnection() {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         console.log('Testing robot connection...');
-        const response = await fetch(`https://${config.ec2.address}/robot/health`, {
+        const response = await fetch(
+            // `https://${config.ec2.address}/robot/health`
+            `https://${config.robot.address}:${config.robot.nginxPort}/health`
+            , {
             signal: controller.signal,
             method: 'GET',
             headers: {
@@ -148,7 +152,9 @@ async function initWebRTC() {
         console.log('Using ICE servers configuration:', iceServers);
 
         // Initialize WebRTC connection with verified ICE servers
-        const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
+        // const signalingServerPath = `wss://${config.ec2.address}/robot/webrtc`;
+        const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/viewer?subscribe_video=ros_image:/image_raw`;
+
         console.log('Connecting to signaling server:', signalingServerPath);
 
         // Create connection with configuration
