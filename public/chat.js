@@ -365,5 +365,5 @@ window.addEventListener('load', initWebRTC);
 
 // Make functions globally available
 window.initWebRTC = initWebRTC;
-window.cleanupWebRTC = cleanupWebRTC;
+// window.cleanupWebRTC = cleanupWebRTC;
 window.testConnection = testConnection;
