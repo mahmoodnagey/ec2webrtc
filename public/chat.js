@@ -10,13 +10,13 @@ const config = {
     },
     robot: {
         address: 'robopave',
-        port: 8085,
-        nginxPort: 8080
+        port: 8085,  // Changed to WebRTC service port
+        nginxPort: 8080  // Add this for health check
     },
     xirsys: {
-        url: 'https://global.xirsys.net/_turn/MyFirstApp',
+        url: 'https://global.xirsys.net/_turn/MyFirstApp', // Updated URL
         ident: 'mahmoudnagy',
-        secret: '1174b892-a746-11ef-ae7d-0242ac130006',
+        secret: '1174b892-a746-11ef-ae7d-0242ac130006', // Updated secret
     },
     webrtcOptions: {
         bundlePolicy: 'max-bundle',
@@ -26,84 +26,25 @@ const config = {
     }
 };
 
-// Constants
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAY = 2000;
-const STREAM_STALL_THRESHOLD = 3000; // 3 seconds
-const QUALITY_CHECK_INTERVAL = 5000;
-const HIGH_PACKET_LOSS_THRESHOLD = 10; // 10%
-
 // Global variables
-let webrtcRosConnection = null;
+let webrtcRosConnection;
 let connectionAttempts = 0;
-let qualityCheckInterval = null;
-let streamMonitorInterval = null;
+const MAX_CONNECTION_ATTEMPTS = 0;
+const RETRY_INTERVAL = 2000;
 
-// Utility functions
-function updateStatus(message, isError = false) {
-    const statusElement = document.getElementById('connection-status');
-    if (statusElement) {
-        statusElement.textContent = message;
-        statusElement.style.color = isError ? 'red' : 'green';
-    }
-    console.log(`[WebRTC Status] ${message}`);
-}
-
-// Clean up function
-async function cleanupWebRTC() {
-    console.log('Starting cleanup...');
-    
-    // Clear monitoring intervals
-    if (qualityCheckInterval) {
-        clearInterval(qualityCheckInterval);
-        qualityCheckInterval = null;
-    }
-    if (streamMonitorInterval) {
-        clearInterval(streamMonitorInterval);
-        streamMonitorInterval = null;
-    }
-
-    // Clean up video element
-    const videoElement = document.getElementById('robot-video');
-    if (videoElement) {
-        if (videoElement.srcObject) {
-            videoElement.srcObject.getTracks().forEach(track => {
-                track.stop();
-                console.log(`Stopped track: ${track.kind}`);
-            });
-            videoElement.srcObject = null;
-        }
-        videoElement.removeAttribute('src');
-        videoElement.load();
-    }
-
-    // Close WebRTC connection
-    if (webrtcRosConnection) {
-        try {
-            await webrtcRosConnection.close();
-            webrtcRosConnection = null;
-            console.log('WebRTC connection closed');
-        } catch (error) {
-            console.error('Error during WebRTC cleanup:', error);
-        }
-    }
-    
-    updateStatus('Connection cleaned up');
-}
-
-
-// ICE Server configuration
+// Get ICE servers configuration
 async function getXirSysIceServers() {
     try {
         console.log('Fetching ICE servers from XirSys...');
         const auth = btoa(`${config.xirsys.ident}:${config.xirsys.secret}`);
         
-        const response = await fetch(config.xirsys.url, {
+        let response = await fetch(config.xirsys.url, {
             method: "PUT",
             headers: {
                 "Authorization": `Basic ${auth}`,
                 "Content-Type": "application/json",
             },
+            // Add error handling timeout
             signal: AbortSignal.timeout(5000)
         });
 
@@ -113,29 +54,46 @@ async function getXirSysIceServers() {
 
         const data = await response.json();
         if (data.v && data.v.iceServers) {
-            console.log('Successfully retrieved ICE servers');
+            console.log('Successfully retrieved ICE servers:', data.v.iceServers);
             return data.v.iceServers;
+        } else {
+            console.warn('Unexpected XirSys response format:', data);
+            throw new Error('Invalid ICE servers response format');
         }
-        throw new Error('Invalid ICE servers response');
     } catch (error) {
-        console.warn('Using fallback STUN servers:', error);
-        return [{
-            urls: [
-                "stun:stun1.l.google.com:19302",
-                "stun:stun2.l.google.com:19302"
-            ]
-        }];
+        console.warn('Using fallback STUN servers. Error:', error.message);
+        return [
+            { 
+                urls: [
+                    "stun:stun1.l.google.com:19302",
+                    "stun:stun2.l.google.com:19302",
+                ]
+            }
+        ];
     }
 }
 
-// Connection verification
+// Update status display
+function updateStatus(message, isError = false) {
+    const statusElement = document.getElementById('connection-status');
+    if (statusElement) {
+        statusElement.textContent = message;
+        statusElement.style.color = isError ? 'red' : 'green';
+    }
+    console.log(`[WebRTC Status] ${message}`);
+}
+
+// Check VPN connection through health endpoint
 async function checkVPNConnection() {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         console.log('Testing robot connection...');
-        const response = await fetch(`https://${config.ec2.address}/robot/health`, {
+        const response = await fetch(
+            `https://${config.ec2.address}/robot/health`
+            // `https://${config.robot.address}:${config.robot.nginxPort}/health`
+            , {
             signal: controller.signal,
             method: 'GET',
             headers: {
@@ -158,264 +116,254 @@ async function checkVPNConnection() {
     }
 }
 
-// ROS Topic verification
-async function verifyRosTopic() {
+// Add this before initWebRTC
+function checkWebRTCAvailability() {
+    if (!window.WebrtcRos) {
+        throw new Error('WebrtcRos not available. Check if webrtc_ros.js is loaded correctly');
+    }
+    console.log('WebrtcRos is available');
+}
+
+// Update window.onload
+window.addEventListener('load', async () => {
     try {
-        const response = await fetch(`https://${config.ec2.address}/robot/ros/topics`);
-        const topics = await response.json();
-        
-        if (!topics.includes('/image_raw')) {
-            throw new Error('Camera topic not found');
-        }
-        return true;
+        checkWebRTCAvailability();
+        await initWebRTC();
     } catch (error) {
-        console.error('ROS topic verification failed:', error);
-        return false;
+        updateStatus(`Initialization error: ${error.message}`, true);
     }
-}
-
-// Stream quality monitoring
-function monitorStreamQuality(videoElement) {
-    if (!videoElement) return;
-    
-    if (streamMonitorInterval) {
-        clearInterval(streamMonitorInterval);
-    }
-    
-    let lastFrameTime = Date.now();
-    let frameCounter = 0;
-    let lastFrameCount = 0;
-    
-    videoElement.addEventListener('timeupdate', () => {
-        lastFrameTime = Date.now();
-        frameCounter++;
-    });
-
-    streamMonitorInterval = setInterval(() => {
-        // Check if video is stalled
-        const timeSinceLastFrame = Date.now() - lastFrameTime;
-        if (timeSinceLastFrame > STREAM_STALL_THRESHOLD) {
-            updateStatus('Video stream stalled', true);
-            retryConnection();
-            return;
-        }
-
-        // Calculate FPS
-        const fps = frameCounter - lastFrameCount;
-        lastFrameCount = frameCounter;
-        
-        if (fps < 10) { // Alert on low FPS
-            console.warn(`Low FPS detected: ${fps}`);
-        }
-
-        // Check video element state
-        if (videoElement.paused || videoElement.ended) {
-            updateStatus('Video stream stopped', true);
-            retryConnection();
-        }
-    }, 1000);
-}
-
-// Connection quality monitoring
-function monitorConnectionQuality() {
-    if (qualityCheckInterval) {
-        clearInterval(qualityCheckInterval);
-    }
-
-    qualityCheckInterval = setInterval(async () => {
-        if (!webrtcRosConnection?.peerConnection) return;
-        
-        try {
-            const stats = await webrtcRosConnection.peerConnection.getStats();
-            
-            stats.forEach(report => {
-                if (report.type === 'inbound-rtp' && report.kind === 'video') {
-                    // Calculate packet loss
-                    const packetsLost = report.packetsLost || 0;
-                    const packetsReceived = report.packetsReceived || 0;
-                    const total = packetsLost + packetsReceived;
-                    
-                    if (total > 0) {
-                        const lossRate = (packetsLost / total) * 100;
-                        if (lossRate > HIGH_PACKET_LOSS_THRESHOLD) {
-                            updateStatus(`High packet loss: ${lossRate.toFixed(1)}%`, true);
-                        }
-                    }
-
-                    // Monitor other metrics
-                    if (report.jitter > 50) {
-                        console.warn(`High jitter detected: ${report.jitter}ms`);
-                    }
-                    
-                    if (report.frameWidth && report.frameHeight) {
-                        console.log(`Resolution: ${report.frameWidth}x${report.frameHeight}`);
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Stats collection error:', error);
-        }
-    }, QUALITY_CHECK_INTERVAL);
-}
-
-// Connection retry mechanism
-async function retryConnection() {
-    if (connectionAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        updateStatus('Max reconnection attempts reached', true);
-        return;
-    }
-
-    connectionAttempts++;
-    const delay = Math.min(RECONNECT_DELAY * Math.pow(1.5, connectionAttempts - 1), 10000);
-    
-    updateStatus(`Reconnecting (${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS}) in ${delay/1000}s...`);
-    
-    await cleanupWebRTC();
-    
-    setTimeout(async () => {
-        try {
-            await initWebRTC();
-        } catch (error) {
-            console.error('Reconnection attempt failed:', error);
-            retryConnection();
-        }
-    }, delay);
-}
+});
 
 // Initialize WebRTC connection
 async function initWebRTC() {
     try {
         updateStatus('Initializing connection...');
 
-        // Verify connections
+        // Check VPN connection first
         await checkVPNConnection();
         updateStatus('Robot connection verified');
 
-        if (!await verifyRosTopic()) {
-            throw new Error('Required ROS topics not available');
-        }
-
-        // Get ICE servers
+        // Get and verify ICE servers
         const iceServers = await getXirSysIceServers();
         if (!iceServers || !iceServers.length) {
             throw new Error('No valid ICE servers available');
         }
         updateStatus('ICE servers obtained');
+        console.log('Using ICE servers configuration:', iceServers);
 
-        // Initialize WebRTC connection
+        // Initialize WebRTC connection with verified ICE servers
         const signalingServerPath = `https://${config.ec2.address}/robot/webrtc`;
+        // const signalingServerPath = `wss://${config.robot.address}:${config.robot.port}/viewer?subscribe_video=ros_image:/image_raw`;
+
         console.log('Connecting to signaling server:', signalingServerPath);
 
+        // Create connection with configuration
         webrtcRosConnection = window.WebrtcRos.createConnection(signalingServerPath, {
             ...config.webrtcOptions,
             iceServers: iceServers
         });
 
         if (!webrtcRosConnection) {
-            throw new Error('Failed to create WebRTC connection');
+            throw new Error('Failed to create WebRTC connection object');
         }
-
-        // Set up ICE connection monitoring
-        webrtcRosConnection.peerConnection.oniceconnectionstatechange = () => {
-            const state = webrtcRosConnection.peerConnection.iceConnectionState;
-            console.log('ICE Connection State:', state);
-            
-            switch(state) {
-                case 'checking':
-                    updateStatus('Establishing connection...');
-                    break;
-                case 'connected':
-                    updateStatus('Connection established');
-                    connectionAttempts = 0; // Reset counter on successful connection
-                    break;
-                case 'disconnected':
-                    updateStatus('Connection lost', true);
-                    retryConnection();
-                    break;
-                case 'failed':
-                    updateStatus('Connection failed', true);
-                    retryConnection();
-                    break;
-                case 'closed':
-                    updateStatus('Connection closed');
-                    break;
-            }
-        };
 
         // Configure video stream
         webrtcRosConnection.onConfigurationNeeded = async function() {
             try {
                 updateStatus('Setting up video stream...');
-                
+                console.log('Configuring video stream from ROS...');
+        
+                // Add stream configuration logging
                 const streamConfig = {
                     video: {
-                        id: 'subscribed_video',
-                        src: 'ros_image:/image_raw'
+                        id: 'subscribed_video', // Internal ID expected by library
+                        src: 'ros_image:/image_raw' // ROS topic path
                     }
                 };
-                
+                console.log('Stream configuration:', streamConfig);
+        
                 const event = await webrtcRosConnection.addRemoteStream(streamConfig);
+                console.log('Remote stream added:', event);
+        
                 if (!event || !event.stream) {
-                    throw new Error('No stream received');
+                    throw new Error('No stream received from robot');
                 }
-
+        
+                const videoTracks = event.stream.getVideoTracks();
+                console.log('Video tracks:', videoTracks);
+        
+                if (!videoTracks || videoTracks.length === 0) {
+                    throw new Error('No video tracks in stream');
+                }
+        
                 const videoElement = document.getElementById('robot-video');
                 if (!videoElement) {
                     throw new Error('Video element not found');
                 }
-
+        
+                // Set up video element
                 videoElement.srcObject = event.stream;
                 videoElement.onloadedmetadata = () => {
                     console.log('Video metadata loaded');
-                    videoElement.play().catch(console.error);
+                    updateStatus('Video metadata received');
                 };
-
-                // Start monitoring
-                monitorStreamQuality(videoElement);
-                monitorConnectionQuality();
-
+        
+                videoElement.oncanplay = () => {
+                    console.log('Video can play');
+                    updateStatus('Video ready to play');
+                };
+        
+                // Monitor video tracks
+                videoTracks.forEach((track, index) => {
+                    console.log(`Video track ${index} settings:`, track.getSettings());
+                    
+                    track.onended = () => {
+                        console.log(`Video track ${index} ended`);
+                        updateStatus('Video track ended', true);
+                    };
+        
+                    track.onmute = () => {
+                        console.log(`Video track ${index} muted`);
+                        updateStatus('Video track muted', true);
+                    };
+        
+                    track.onunmute = () => {
+                        console.log(`Video track ${index} unmuted`);
+                        updateStatus('Video track active');
+                    };
+                });
+        
+                try {
+                    await videoElement.play();
+                    console.log('Video playback started');
+                    updateStatus('Video stream active');
+                    connectionAttempts = 0;
+                } catch (playError) {
+                    console.error('Video playback failed:', playError);
+                    throw new Error(`Video playback failed: ${playError.message}`);
+                }
+        
+                // Send configuration to complete setup
+                console.log('Sending WebRTC configuration...');
                 webrtcRosConnection.sendConfigure();
-                updateStatus('Video stream configured');
-                
+                console.log('WebRTC configuration sent');
+        
             } catch (error) {
-                console.error('Stream setup error:', error);
-                updateStatus('Stream setup failed', true);
-                throw error;
+                console.error('Video stream setup error:', error);
+                throw new Error(`Stream setup failed: ${error.message}`);
             }
         };
 
-        await webrtcRosConnection.connect();
-        console.log('WebRTC connection established');
+        // Connect
+        try {
+            await webrtcRosConnection.connect();
+            console.log('WebRTC connection established successfully');
+            
+            // Only set up error handlers after successful connection
+            if (webrtcRosConnection.signalingChannel) {
+                webrtcRosConnection.signalingChannel.onclose = (event) => {
+                    const reason = event.reason || 'Unknown reason';
+                    updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
+                    if (!event.wasClean) {
+                        retryConnection();
+                    }
+                };
+            }
+
+            updateStatus('WebRTC connection established');
+        } catch (error) {
+            throw new Error(`Connection failed: ${error.message}`);
+        }
 
     } catch (error) {
         console.error('WebRTC initialization error:', error);
         updateStatus(`Connection error: ${error.message}`, true);
-        throw error;
+        retryConnection();
     }
 }
 
-// Test connection
+// Retry connection with exponential backoff
+// async function retryConnection() {
+//     if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+//         connectionAttempts++;
+//         const delay = Math.min(RETRY_INTERVAL * Math.pow(1.5, connectionAttempts - 1), 10000);
+        
+//         updateStatus(`Retrying connection ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS} in ${delay/1000}s...`);
+        
+//         await cleanupWebRTC();
+//         setTimeout(initWebRTC, delay);
+//     } else {
+//         updateStatus('Connection failed after maximum attempts', true);
+//         console.error(
+//             'Troubleshooting guide:\n',
+//             '1. Verify Husarnet VPN status:\n',
+//             `   husarnet status\n`,
+//             '2. Check robot connectivity:\n',
+//             `   ping ${config.robot.address}\n`,
+//             '3. Verify WebRTC service on robot:\n',
+//             `   sudo systemctl status webrtc-service\n`,
+//             '4. Check ROS2 camera node:\n',
+//             '   ros2 topic list\n',
+//             '   ros2 topic echo /image_raw\n',
+//             '5. Review WebRTC logs:\n',
+//             '   browser console (F12)\n',
+//             '   robot webrtc service logs\n',
+//             '6. Verify network connections and firewalls'
+//         );
+//     }
+// }
+
+// Clean up WebRTC resources
+async function cleanupWebRTC() {
+    if (webrtcRosConnection) {
+        try {
+            const videoElement = document.getElementById('robot-video');
+            if (videoElement && videoElement.srcObject) {
+                videoElement.srcObject.getTracks().forEach(track => {
+                    track.stop();
+                    console.log(`Stopped track: ${track.kind}`);
+                });
+                videoElement.srcObject = null;
+            }
+            
+            await webrtcRosConnection.close();
+            webrtcRosConnection = null;
+            updateStatus('Connection cleaned up');
+        } catch (error) {
+            console.error('Cleanup error:', error);
+        }
+    }
+}
+
+// Test connection function
 async function testConnection() {
     try {
-        updateStatus('Testing connection...');
+        updateStatus('Testing robot connection...');
         await checkVPNConnection();
-        updateStatus('Connection test successful!');
+        updateStatus('Robot connection test successful!');
     } catch (error) {
         updateStatus(`Connection test failed: ${error.message}`, true);
     }
 }
 
-// Event listeners
-window.addEventListener('load', initWebRTC);
-
-document.addEventListener('visibilitychange', () => {
+// Event Listeners
+document.addEventListener('visibilitychange', async function() {
     if (document.hidden) {
-        cleanupWebRTC();
+        updateStatus('Page hidden, cleaning up...');
+        await cleanupWebRTC();
     } else {
+        updateStatus('Page visible, reconnecting...');
         initWebRTC();
     }
 });
 
-// Export functions for global access
+// Initialize on page load
+window.addEventListener('load', initWebRTC);
+
+// Cleanup on page unload
+// window.addEventListener('beforeunload', cleanupWebRTC);
+
+// Make functions globally available
 window.initWebRTC = initWebRTC;
+// window.cleanupWebRTC = cleanupWebRTC;
 window.testConnection = testConnection;

@@ -1,5 +1,5 @@
 const express = require("express");
-const http = require("http");
+const http = require("http");  // Changed to http since Nginx handles SSL
 const socket = require("socket.io");
 const fetch = require('node-fetch');
 const app = express();
@@ -22,19 +22,6 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Add ROS topics endpoint
-app.get('/ros/topics', async (req, res) => {
-    try {
-        // Forward to robot's ROS2 topic list endpoint
-        const response = await fetch('http://robopave:8085/ros/topics');
-        const topics = await response.json();
-        res.json(topics);
-    } catch (error) {
-        console.error('ROS topics error:', error);
-        res.status(500).json({ error: 'Failed to fetch ROS topics' });
-    }
-});
-
 // Socket.io setup with CORS enabled
 const io = socket(server, {
     cors: {
@@ -53,6 +40,7 @@ async function getIceServers() {
     };
 
     try {
+        // Try to get XirSys ICE servers first
         const response = await fetch(`${xirsysConfig.url}/ice`, {
             method: 'PUT',
             headers: {
@@ -75,6 +63,7 @@ async function getIceServers() {
         throw new Error('Failed to get XirSys ICE servers');
     } catch (error) {
         console.warn('Falling back to public STUN servers:', error.message);
+        // Fallback to public STUN servers
         return [
             { urls: "stun:stun.l.google.com:19302" },
             { urls: "stun:stun1.l.google.com:19302" },
@@ -103,6 +92,7 @@ io.on("connection", function (socket) {
                     { urls: "stun:stun1.l.google.com:19302" }
                 ] 
             });
+            console.log("Fallback ICE servers sent to client:", socket.id);
         });
 
     // Handle room joining
@@ -125,20 +115,27 @@ io.on("connection", function (socket) {
         console.log("Current Rooms:", rooms);
     });
 
-    // Handle WebRTC signaling
+    // Handle ready signal
     socket.on("ready", function (roomName) {
+        console.log(`Client ${socket.id} in room ${roomName} is ready`);
         socket.broadcast.to(roomName).emit("ready");
     });
 
+    // Handle ICE candidates
     socket.on("candidate", function (candidate, roomName) {
+        console.log(`Received ICE candidate from ${socket.id} for room ${roomName}`);
         socket.broadcast.to(roomName).emit("candidate", candidate);
     });
 
+    // Handle offers
     socket.on("offer", function (offer, roomName) {
+        console.log(`Received offer from ${socket.id} for room ${roomName}`);
         socket.broadcast.to(roomName).emit("offer", offer);
     });
 
+    // Handle answers
     socket.on("answer", function (answer, roomName) {
+        console.log(`Received answer from ${socket.id} for room ${roomName}`);
         socket.broadcast.to(roomName).emit("answer", answer);
     });
 
@@ -179,5 +176,6 @@ process.on('SIGINT', () => {
 // Uncaught exception handler
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
+    // Perform any necessary cleanup here
     process.exit(1);
 });
