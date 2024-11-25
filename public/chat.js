@@ -254,26 +254,26 @@ async function initWebRTC() {
             }
         };
 
-        // // Connect
-        // try {
-        //     await webrtcRosConnection.connect();
-        //     console.log('WebRTC connection established successfully');
+        // Connect
+        try {
+            await webrtcRosConnection.connect();
+            console.log('WebRTC connection established successfully');
             
-        //     // Only set up error handlers after successful connection
-        //     if (webrtcRosConnection.signalingChannel) {
-        //         webrtcRosConnection.signalingChannel.onclose = (event) => {
-        //             const reason = event.reason || 'Unknown reason';
-        //             updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
-        //             if (!event.wasClean) {
-        //                 retryConnection();
-        //             }
-        //         };
-        //     }
+            // Only set up error handlers after successful connection
+            if (webrtcRosConnection.signalingChannel) {
+                webrtcRosConnection.signalingChannel.onclose = (event) => {
+                    const reason = event.reason || 'Unknown reason';
+                    updateStatus(`Signaling channel closed: ${reason}`, !event.wasClean);
+                    if (!event.wasClean) {
+                        retryConnection();
+                    }
+                };
+            }
 
-        //     updateStatus('WebRTC connection established');
-        // } catch (error) {
-        //     throw new Error(`Connection failed: ${error.message}`);
-        // }
+            updateStatus('WebRTC connection established');
+        } catch (error) {
+            throw new Error(`Connection failed: ${error.message}`);
+        }
 
     } catch (error) {
         console.error('WebRTC initialization error:', error);
@@ -314,26 +314,26 @@ async function initWebRTC() {
 // }
 
 // Clean up WebRTC resources
-// async function cleanupWebRTC() {
-//     if (webrtcRosConnection) {
-//         try {
-//             const videoElement = document.getElementById('robot-video');
-//             if (videoElement && videoElement.srcObject) {
-//                 videoElement.srcObject.getTracks().forEach(track => {
-//                     track.stop();
-//                     console.log(`Stopped track: ${track.kind}`);
-//                 });
-//                 videoElement.srcObject = null;
-//             }
+async function cleanupWebRTC() {
+    if (webrtcRosConnection) {
+        try {
+            const videoElement = document.getElementById('robot-video');
+            if (videoElement && videoElement.srcObject) {
+                videoElement.srcObject.getTracks().forEach(track => {
+                    track.stop();
+                    console.log(`Stopped track: ${track.kind}`);
+                });
+                videoElement.srcObject = null;
+            }
             
-//             await webrtcRosConnection.close();
-//             webrtcRosConnection = null;
-//             updateStatus('Connection cleaned up');
-//         } catch (error) {
-//             console.error('Cleanup error:', error);
-//         }
-//     }
-// }
+            await webrtcRosConnection.close();
+            webrtcRosConnection = null;
+            updateStatus('Connection cleaned up');
+        } catch (error) {
+            console.error('Cleanup error:', error);
+        }
+    }
+}
 
 // Test connection function
 async function testConnection() {
