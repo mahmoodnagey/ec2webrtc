@@ -185,15 +185,15 @@ async function initWebRTC() {
                 // const event = await webrtcRosConnection.addRemoteStream(streamConfig);
                 // console.log('Remote stream added:', event);
 
-                webrtcRosConnection.addRemoteStream(streamConfig).then(function(event) {
-                    console.log("Connecting WebRTC stream to <video> element");
-                    document.getElementById("robot-video").srcObject = event.stream;
-                    event.remove.then(function(event) {
-                        console.log("Disconnecting WebRTC stream from <video> element");
-                        document.getElementById("robot-video").srcObject = null;
-                    });
-                });
-                webrtcRosConnection.sendConfigure();
+                // webrtcRosConnection.addRemoteStream(streamConfig).then(function(event) {
+                //     console.log("Connecting WebRTC stream to <video> element");
+                //     document.getElementById("robot-video").srcObject = event.stream;
+                //     event.remove.then(function(event) {
+                //         console.log("Disconnecting WebRTC stream from <video> element");
+                //         document.getElementById("robot-video").srcObject = null;
+                //     });
+                // });
+                // webrtcRosConnection.sendConfigure();
         
                 // if (!event || !event.stream) {
                 //     throw new Error('No stream received from robot');
@@ -206,17 +206,17 @@ async function initWebRTC() {
                 //     throw new Error('No video tracks in stream');
                 // }
         
-                // const videoElement = document.getElementById('robot-video');
+                const videoElement = document.getElementById('robot-video');
                 // if (!videoElement) {
                 //     throw new Error('Video element not found');
                 // }
         
                 // Set up video element
-                // videoElement.srcObject = event.stream;
-                // videoElement.onloadedmetadata = () => {
-                //     console.log('Video metadata loaded');
-                //     updateStatus('Video metadata received');
-                // };
+                videoElement.srcObject = event.stream;
+                videoElement.onloadedmetadata = () => {
+                    console.log('Video metadata loaded');
+                    updateStatus('Video metadata received');
+                };
         
                 // videoElement.oncanplay = () => {
                 //     console.log('Video can play');
@@ -254,9 +254,9 @@ async function initWebRTC() {
                 // }
         
                 // Send configuration to complete setup
-                // console.log('Sending WebRTC configuration...');
-                // webrtcRosConnection.sendConfigure();
-                // console.log('WebRTC configuration sent');
+                console.log('Sending WebRTC configuration...');
+                webrtcRosConnection.sendConfigure();
+                console.log('WebRTC configuration sent');
         
             } catch (error) {
                 console.error('Video stream setup error:', error);
