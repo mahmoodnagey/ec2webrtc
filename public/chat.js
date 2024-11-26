@@ -187,7 +187,7 @@ async function initWebRTC() {
 
                 webrtcRosConnection.addRemoteStream(streamConfig).then(function(event) {
                     console.log("Connecting WebRTC stream to <video> element");
-                    document.getElementById("remote-video").srcObject = event.stream;
+                    document.getElementById("robot-video").srcObject = event.stream;
                     event.remove.then(function(event) {
                         console.log("Disconnecting WebRTC stream from <video> element");
                         document.getElementById("robot-video").srcObject = null;
