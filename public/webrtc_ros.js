@@ -172,10 +172,6 @@ window.WebrtcRos = (function() {
 
 			console.log("Stored callbacks for stream_id:", self.addStreamCallbacks[stream_id]);
 
-			self.addStreamCallbacks[stream_id].resolve(result);
-			console.log("Promise resolved for stream_id:", stream_id, "with result:", result);
-
-
 		});
 	};
 	WebrtcRosConnection.prototype.removeRemoteStream = function(stream) {

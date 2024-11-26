@@ -195,68 +195,68 @@ async function initWebRTC() {
                 });
                 webrtcRosConnection.sendConfigure();
         
-                if (!event || !event.stream) {
-                    throw new Error('No stream received from robot');
-                }
+                // if (!event || !event.stream) {
+                //     throw new Error('No stream received from robot');
+                // }
         
-                const videoTracks = event.stream.getVideoTracks();
-                console.log('Video tracks:', videoTracks);
+                // const videoTracks = event.stream.getVideoTracks();
+                // console.log('Video tracks:', videoTracks);
         
-                if (!videoTracks || videoTracks.length === 0) {
-                    throw new Error('No video tracks in stream');
-                }
+                // if (!videoTracks || videoTracks.length === 0) {
+                //     throw new Error('No video tracks in stream');
+                // }
         
-                const videoElement = document.getElementById('robot-video');
-                if (!videoElement) {
-                    throw new Error('Video element not found');
-                }
+                // const videoElement = document.getElementById('robot-video');
+                // if (!videoElement) {
+                //     throw new Error('Video element not found');
+                // }
         
                 // Set up video element
-                videoElement.srcObject = event.stream;
-                videoElement.onloadedmetadata = () => {
-                    console.log('Video metadata loaded');
-                    updateStatus('Video metadata received');
-                };
+                // videoElement.srcObject = event.stream;
+                // videoElement.onloadedmetadata = () => {
+                //     console.log('Video metadata loaded');
+                //     updateStatus('Video metadata received');
+                // };
         
-                videoElement.oncanplay = () => {
-                    console.log('Video can play');
-                    updateStatus('Video ready to play');
-                };
+                // videoElement.oncanplay = () => {
+                //     console.log('Video can play');
+                //     updateStatus('Video ready to play');
+                // };
         
                 // Monitor video tracks
-                videoTracks.forEach((track, index) => {
-                    console.log(`Video track ${index} settings:`, track.getSettings());
+                // videoTracks.forEach((track, index) => {
+                //     console.log(`Video track ${index} settings:`, track.getSettings());
                     
-                    track.onended = () => {
-                        console.log(`Video track ${index} ended`);
-                        updateStatus('Video track ended', true);
-                    };
+                //     track.onended = () => {
+                //         console.log(`Video track ${index} ended`);
+                //         updateStatus('Video track ended', true);
+                //     };
         
-                    track.onmute = () => {
-                        console.log(`Video track ${index} muted`);
-                        updateStatus('Video track muted', true);
-                    };
+                //     track.onmute = () => {
+                //         console.log(`Video track ${index} muted`);
+                //         updateStatus('Video track muted', true);
+                //     };
         
-                    track.onunmute = () => {
-                        console.log(`Video track ${index} unmuted`);
-                        updateStatus('Video track active');
-                    };
-                });
+                //     track.onunmute = () => {
+                //         console.log(`Video track ${index} unmuted`);
+                //         updateStatus('Video track active');
+                //     };
+                // });
         
-                try {
-                    await videoElement.play();
-                    console.log('Video playback started');
-                    updateStatus('Video stream active');
-                    connectionAttempts = 0;
-                } catch (playError) {
-                    console.error('Video playback failed:', playError);
-                    throw new Error(`Video playback failed: ${playError.message}`);
-                }
+                // try {
+                //     await videoElement.play();
+                //     console.log('Video playback started');
+                //     updateStatus('Video stream active');
+                //     connectionAttempts = 0;
+                // } catch (playError) {
+                //     console.error('Video playback failed:', playError);
+                //     throw new Error(`Video playback failed: ${playError.message}`);
+                // }
         
                 // Send configuration to complete setup
-                console.log('Sending WebRTC configuration...');
-                webrtcRosConnection.sendConfigure();
-                console.log('WebRTC configuration sent');
+                // console.log('Sending WebRTC configuration...');
+                // webrtcRosConnection.sendConfigure();
+                // console.log('WebRTC configuration sent');
         
             } catch (error) {
                 console.error('Video stream setup error:', error);
