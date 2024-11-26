@@ -123,12 +123,21 @@ window.WebrtcRos = (function() {
 		);
 	};
 	WebrtcRosConnection.prototype.addRemoteStream = function(config) {
+		console.log("addRemoteStream called with config:", config);
+
 		var stream_id = newStreamId();
 		var self = this;
 
+		console.log("Generated stream_id:", stream_id);
+
 		this.lastConfigureActionPromise = this.lastConfigureActionPromise.then(
 			function(actions) {
+				console.log("Previous actions:", actions);
+
 				actions.push({"type":"add_stream", "id": stream_id});
+
+				console.log("Added stream action:", actions);
+
 				if(config.video) {
 					actions.push({
 						"type":"add_video_track",
@@ -136,7 +145,9 @@ window.WebrtcRos = (function() {
 						"id": stream_id + "/" + config.video.id,
 						"src": config.video.src
 					});
-					console.log(config.video);
+
+					console.log(`if(config.video) => ${config.video}`);
+					console.log("Added video track action:", actions);
 				}
 				if(config.audio) {
 					actions.push({
@@ -146,14 +157,25 @@ window.WebrtcRos = (function() {
 						"src": config.audio.src
 					});
 				}
+				console.log(`Actions before return => ${actions}`);
 				return actions;
 			}
 		);
 		return new Promise(function(resolve, reject) {
+
+			console.log("Promise created for stream_id:", stream_id);
+
 			self.addStreamCallbacks[stream_id] = {
 				"resolve": resolve,
 				"reject": reject
 			};
+
+			console.log("Stored callbacks for stream_id:", self.addStreamCallbacks[stream_id]);
+
+			self.addStreamCallbacks[stream_id].resolve(result);
+			console.log("Promise resolved for stream_id:", stream_id, "with result:", result);
+
+
 		});
 	};
 	WebrtcRosConnection.prototype.removeRemoteStream = function(stream) {
