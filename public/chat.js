@@ -182,8 +182,18 @@ async function initWebRTC() {
                 };
                 console.log('Stream configuration:', streamConfig);
         
-                const event = await webrtcRosConnection.addRemoteStream(streamConfig);
-                console.log('Remote stream added:', event);
+                // const event = await webrtcRosConnection.addRemoteStream(streamConfig);
+                // console.log('Remote stream added:', event);
+
+                webrtcRosConnection.addRemoteStream(streamConfig).then(function(event) {
+                    console.log("Connecting WebRTC stream to <video> element");
+                    document.getElementById("remote-video").srcObject = event.stream;
+                    event.remove.then(function(event) {
+                        console.log("Disconnecting WebRTC stream from <video> element");
+                        document.getElementById("robot-video").srcObject = null;
+                    });
+                });
+                webrtcRosConnection.sendConfigure();
         
                 if (!event || !event.stream) {
                     throw new Error('No stream received from robot');
