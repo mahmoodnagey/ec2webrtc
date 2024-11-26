@@ -136,6 +136,7 @@ window.WebrtcRos = (function() {
 						"id": stream_id + "/" + config.video.id,
 						"src": config.video.src
 					});
+					console.log(config.video);
 				}
 				if(config.audio) {
 					actions.push({

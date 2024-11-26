@@ -182,7 +182,7 @@ async function initWebRTC() {
                 };
                 console.log('Stream configuration:', streamConfig);
         
-                // const event = await webrtcRosConnection.addRemoteStream(streamConfig);
+                const event = await webrtcRosConnection.addRemoteStream(streamConfig);
                 console.log('Remote stream added:', event);
         
                 if (!event || !event.stream) {
